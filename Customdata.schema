@@ -1,0 +1,49 @@
+{
+  "$schema": "http://json-schema.org/draft-04/schema#",
+  "type": "array",
+  "items": [
+    {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "phone": {
+          "type": "string"
+        },
+        "email": {
+          "type": "string"
+        },
+        "postalZip": {
+          "type": "string"
+        },
+        "region": {
+          "type": "string"
+        },
+        "country": {
+          "type": "string"
+        },
+        "CardNumber": {
+          "type": "string"
+        },
+        "Transaction amount ": {
+          "type": "integer"
+        },
+        "LocationGeoDetails": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "name",
+        "phone",
+        "email",
+        "postalZip",
+        "region",
+        "country",
+        "CardNumber",
+        "Transaction amount ",
+        "LocationGeoDetails"
+      ]
+    }
+  ]
+}
