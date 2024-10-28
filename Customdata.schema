@@ -31,6 +31,9 @@
         },
         "LocationGeoDetails": {
           "type": "string"
+        },
+        "CardType ": {
+          "type": "string"
         }
       },
       "required": [
@@ -42,7 +45,8 @@
         "country",
         "CardNumber",
         "Transaction amount ",
-        "LocationGeoDetails"
+        "LocationGeoDetails",
+        "CardType "
       ]
     }
   ]
