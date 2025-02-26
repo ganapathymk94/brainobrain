@@ -1,0 +1,5 @@
+.es(index=index_name, q='orderStatus:statusA OR orderStatus:statusB OR orderStatus:statusC', timefield=_time)
+  .label('Order Status Changes')
+  .lines(fill=1)
+  .point(interval=1h, fill=1)
+  .title('Order ID Lag Between Status Changes')
