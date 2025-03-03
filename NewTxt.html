@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Chatbot Kafka Connectivity</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+            background-color: #f4f4f4;
+        }
+        .chat-container {
+            width: 400px;
+            background: #fff;
+            border-radius: 8px;
+            box-shadow: 0 0 10px rgba(0,0,0,0.1);
+            padding: 20px;
+        }
+        .chat-container h1 {
+            margin-top: 0;
+        }
+        .chat-container .chat-box {
+            height: 300px;
+            overflow-y: auto;
+            border: 1px solid #ccc;
+            padding: 10px;
+            margin-bottom: 10px;
+        }
+        .chat-container .chat-box .message {
+            margin-bottom: 10px;
+        }
+        .chat-container input, .chat-container button {
+            width: 100%;
+            padding: 10px;
+            font-size: 16px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            margin-bottom: 10px;
+        }
+        .chat-container button {
+            background-color: #007bff;
+            color: #fff;
+            cursor: pointer;
+        }
+        .chat-container button:hover {
+            background-color: #0056b3;
+        }
+    </style>
+</head>
+<body>
+    <div class="chat-container">
+        <h1>Chatbot Kafka Connectivity</h1>
+        <div class="chat-box" id="chatBox">
+            <div class="message">Welcome! Type your message to test Kafka connectivity.</div>
+        </div>
+        <input type="text" id="messageInput" placeholder="Enter your message">
+        <button onclick="sendMessage()">Send Message</button>
+    </div>
+
+    <script>
+        const chatBox = document.getElementById('chatBox');
+        const messageInput = document.getElementById('messageInput');
+        const jwtToken = 'your_jwt_token_here'; // Replace with your JWT token
+
+        function appendMessage(sender, message) {
+            const messageDiv = document.createElement('div');
+            messageDiv.classList.add('message');
+            messageDiv.innerHTML = `<strong>${sender}:</strong> ${message}`;
+            chatBox.appendChild(messageDiv);
+            chatBox.scrollTop = chatBox.scrollHeight;
+        }
+
+        function sendMessage() {
+            const message = messageInput.value;
+            if (message.trim() === '') return;
+
+            appendMessage('You', message);
+            messageInput.value = '';
+
+            var xhr = new XMLHttpRequest();
+            xhr.open('GET', `http://localhost:8080/api/chatbot/send?message=${message}`, true);
+            xhr.setRequestHeader('Authorization', 'Bearer ' + jwtToken);
+            xhr.onreadystatechange = function () {
+                if (xhr.readyState == 4) {
+                    if (xhr.status == 200) {
+                        appendMessage('Bot', xhr.responseText);
+                    } else {
+                        appendMessage('Bot', 'Error: ' + xhr.status + ' - ' + xhr.statusText);
+                    }
+                }
+            };
+            xhr.send();
+        }
+    </script>
+</body>
+</html>
