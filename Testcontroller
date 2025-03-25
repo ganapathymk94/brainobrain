@@ -1,0 +1,39 @@
+@RestController
+@RequestMapping("/api")
+public class ApprovalController {
+
+    @Autowired
+    private EmailService emailService;
+
+    @Autowired
+    private ApprovalService approvalService;
+
+    @PostMapping("/sendApprovalRequest")
+    public ResponseEntity<String> sendApprovalRequest(@RequestParam String requestId) {
+        // Step 1: Send Approval Email
+        emailService.sendApprovalEmail("approver@example.com", "Please approve request: " + requestId);
+
+        // Step 2: Wait for approval
+        int maxRetries = 30; // Timeout after 30 retries
+        int delay = 5000; // Delay in milliseconds (5 seconds)
+        int attempts = 0;
+
+        while (attempts < maxRetries) {
+            String status = approvalService.getApprovalStatus(requestId);
+            if ("APPROVED".equalsIgnoreCase(status)) {
+                return ResponseEntity.ok("Request approved. Proceeding...");
+            }
+
+            attempts++;
+            try {
+                Thread.sleep(delay); // Pause execution
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body("Error while waiting for approval.");
+            }
+        }
+
+        return ResponseEntity.status(HttpStatus.REQUEST_TIMEOUT)
+                .body("Approval not received within the timeout period.");
+    }
+}
