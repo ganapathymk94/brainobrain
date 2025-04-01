@@ -83,3 +83,19 @@ if (state === "waiting_schema_action") {
     setMessages([...messages, userMessage, { sender: "Bot", text: botResponse.message }]);
     setState(null);
 }
+
+if (state === "waiting_user_group") {
+    setUserGroup(input);
+    setState("waiting_role");
+    setMessages([...messages, userMessage, { sender: "Bot", text: "What role should be assigned? (admin/producer/consumer)" }]);
+} else if (state === "waiting_role") {
+    const response = await fetch("/api/chatbot/enable_rbac", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ topic: topicName, userGroup, role: input }),
+    });
+
+    const botResponse = await response.json();
+    setMessages([...messages, userMessage, { sender: "Bot", text: botResponse.message }]);
+    setState(null);
+}
