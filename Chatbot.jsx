@@ -54,3 +54,32 @@ const Chatbot = () => {
 };
 
 export default Chatbot;
+
+if (state === "waiting_schema_action") {
+    if (input.toLowerCase().includes("register schema")) {
+        setState("waiting_schema_name");
+        setMessages([...messages, userMessage, { sender: "Bot", text: "Enter schema name:" }]);
+    } else if (input.toLowerCase().includes("view schema versions")) {
+        setState("waiting_schema_name");
+        setMessages([...messages, userMessage, { sender: "Bot", text: "Enter schema name to view versions:" }]);
+    } else {
+        setMessages([...messages, userMessage, { sender: "Bot", text: "Invalid schema operation. Try 'register schema' or 'view schema versions'." }]);
+    }
+} else if (state === "waiting_schema_name") {
+    setSchemaName(input);
+    setState("waiting_user_group");
+    setMessages([...messages, userMessage, { sender: "Bot", text: "Enter your user group:" }]);
+} else if (state === "waiting_user_group") {
+    setUserGroup(input);
+    let endpoint = state === "waiting_schema_name" ? "/api/chatbot/schema_register" : "/api/chatbot/schema_versions";
+
+    const response = await fetch(endpoint, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ schemaName, userGroup }),
+    });
+
+    const botResponse = await response.json();
+    setMessages([...messages, userMessage, { sender: "Bot", text: botResponse.message }]);
+    setState(null);
+}
