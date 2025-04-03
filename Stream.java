@@ -1,15 +1,24 @@
+import org.apache.spark.sql.SparkSession;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
-import org.apache.spark.sql.SparkSession;
+import org.apache.spark.sql.types.DataTypes;
+import org.apache.spark.sql.types.StructType;
 import org.apache.spark.sql.functions;
 
-public class KafkaStreamProcessor {
+public class JsonExtractor {
     public static void main(String[] args) {
         SparkSession spark = SparkSession.builder()
-                .appName("Kafka Structured Streaming")
+                .appName("Kafka JSON Extractor")
                 .master("local[*]")
                 .getOrCreate();
 
+        // Define JSON Schema
+        StructType schema = new StructType()
+                .add("id", DataTypes.StringType)
+                .add("name", DataTypes.StringType)
+                .add("age", DataTypes.IntegerType);
+
+        // Read Kafka Stream
         Dataset<Row> kafkaDF = spark.readStream()
                 .format("kafka")
                 .option("kafka.bootstrap.servers", "localhost:9092")
@@ -17,18 +26,19 @@ public class KafkaStreamProcessor {
                 .option("startingOffsets", "latest")
                 .load();
 
-        // Extract the "value" field (which is a byte array)
-        Dataset<Row> parsedDF = kafkaDF.select(
-                functions.col("key").cast("string"),
-                functions.col("value").cast("string"),
-                functions.col("topic"),
-                functions.col("partition"),
-                functions.col("offset"),
-                functions.col("timestamp")
+        // Convert Kafka Value (Byte Array) to String
+        Dataset<Row> jsonDF = kafkaDF.selectExpr("CAST(value AS STRING) as json_string");
+
+        // Parse JSON
+        Dataset<Row> parsedDF = jsonDF.select(
+                functions.from_json(functions.col("json_string"), schema).alias("data")
         );
 
-        // Write to console for debugging
-        parsedDF.writeStream()
+        // Extract Fields
+        Dataset<Row> finalDF = parsedDF.select("data.*");
+
+        // Write to Console for Debugging
+        finalDF.writeStream()
                 .outputMode("append")
                 .format("console")
                 .start()
