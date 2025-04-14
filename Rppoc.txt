@@ -1,0 +1,35 @@
+
+
+HA setup
+leader election 
+replication assignment 
+sr operations 
+rbac/ username 
+mTLS 
+consumer group rebalancing 
+cpu utilization with high traffic 
+rp console
+load testing
+monitoring
+quick action(on rp console for testing for partition assignment)
+inter comp protocol
+component properties 
+deployment ci/cd
+container support
+logs differentiation 
+rpk cli 
+connectors ( rp connectors)
+kstream/ ksql
+non distributed cluster
+replicator
+object storage migration
+auto data balancer 
+
+--------
+
+h/w assignment 
+
+1. storage - 250GB , SSD /broker 
+2. compute - 8 vCpu, 3GHz , 24GB Ram/ broker
+3. no.of.brokers - 3 
+4. inter AZ n/w capacity
