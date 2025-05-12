@@ -65,3 +65,71 @@ public class ApacheKafkaStreamsService {
         // Implement actual DB insert logic
     }
 }
+
+
+import org.apache.kafka.common.serialization.Serdes;
+import org.apache.kafka.streams.*;
+import org.apache.kafka.streams.kstream.*;
+import org.springframework.stereotype.Service;
+
+import javax.annotation.PostConstruct;
+import java.util.Properties;
+
+@Service
+public class KafkaStreamsService {
+
+    private KafkaStreams streams;
+
+    @PostConstruct
+    public void startKafkaStreams() {
+        StreamsBuilder builder = new StreamsBuilder();
+
+        // Step 1: Read Kafka Topic
+        KStream<String, Long> stream = builder.stream("your-kafka-topic",
+                Consumed.with(Serdes.String(), Serdes.Long()));
+
+        // Step 2: Group by Topic-Partition
+        KGroupedStream<String, Long> groupedByPartition = stream.groupByKey();
+
+        // Step 3: Compute Latest Offset per Partition
+        KTable<String, Long> latestPartitionOffsets = groupedByPartition.aggregate(
+                () -> 0L,
+                (key, newOffset, currentTotal) -> Math.max(newOffset, currentTotal),
+                Materialized.with(Serdes.String(), Serdes.Long())
+        );
+
+        // Step 4: Convert Back to Topic-Level Aggregation (Summing Partition Offsets)
+        KTable<String, Long> totalMessageCountPerTopic = latestPartitionOffsets
+                .toStream()
+                .groupBy((topicPartitionKey, offset) -> extractTopicName(topicPartitionKey)) // Group by topic
+                .reduce((offset1, offset2) -> offset1 + offset2, Materialized.with(Serdes.String(), Serdes.Long())); // Sum partitions
+
+        // Step 5: Save to Database
+        totalMessageCountPerTopic.toStream().foreach((topic, totalCount) -> {
+            saveToDatabase(topic, totalCount);
+        });
+
+        // Start Kafka Streams
+        Properties config = new Properties();
+        config.put(StreamsConfig.APPLICATION_ID_CONFIG, "kafka-streams-app");
+        config.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9092");
+
+        streams = new KafkaStreams(builder.build(), config);
+        streams.start();
+    }
+
+    private String extractTopicName(String topicPartitionKey) {
+        return topicPartitionKey.split("-")[0]; // Extract topic name from "topic-partition"
+    }
+
+    private void saveToDatabase(String topic, Long totalCount) {
+        System.out.println("Saving to DB → Topic: " + topic + ", Messages: " + totalCount);
+        // Implement actual DB insert logic
+    }
+
+    public void stopKafkaStreams() {
+        if (streams != null) {
+            streams.close();
+        }
+    }
+}
