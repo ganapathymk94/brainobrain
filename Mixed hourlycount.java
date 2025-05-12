@@ -1,8 +1,10 @@
-@Query("SELECT mc.clusterName, mc.dateTime, mc.messagesCount - " +
-       "(SELECT COALESCE(MAX(prev.messagesCount), 0) FROM MessageCount prev " +
-       "WHERE prev.clusterName = mc.clusterName AND prev.dateTime < mc.dateTime) " +
-       "FROM MessageCount mc ORDER BY mc.dateTime ASC")
-List<Object[]> getHourlyMessageCountPerCluster();
+@Query(value = "SELECT mc.env_name, mc.inserted_time, mc.topic_name, " +
+               "mc.total_messages - COALESCE((SELECT MAX(prev.total_messages) " +
+               "FROM message_count prev WHERE prev.env_name = mc.env_name " +
+               "AND prev.topic_name = mc.topic_name AND prev.inserted_time < mc.inserted_time), 0) " +
+               "AS hourly_message_count " +
+               "FROM message_count mc ORDER BY mc.inserted_time ASC", nativeQuery = true)
+List<Object[]> getHourlyMessageCountPerEnvTopic();
 
 public Map<String, List<Map<String, Object>>> getHourlyMessageRate() {
     List<Object[]> results = messageCountRepository.getHourlyMessageCountPerCluster();
