@@ -68,3 +68,15 @@ const KafkaHourlyRateChart = () => {
 };
 
 export default KafkaHourlyRateChart;
+
+axios.get("/api/kafka-stats/topics", {
+  headers: { Authorization: `Bearer ${localStorage.getItem("jwtToken")}` },
+})
+  .then(response => setTopics(response.data))
+  .catch(error => {
+    if (error.response.status === 401) {
+      localStorage.removeItem("jwtToken");
+      alert("Session expired! Please log in again.");
+      window.location.href = "/login";
+    }
+  });
