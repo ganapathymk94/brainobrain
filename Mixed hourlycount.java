@@ -76,7 +76,6 @@ import { Chart as ChartJS, CategoryScale, LinearScale, PointElement, LineElement
 ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, Tooltip, Legend);
 
 const KafkaHourlyRateChart = () => {
-  // Static Sample Data
   const data = [
     { dateTime: "2025-05-12T00:00:00Z", messageCount: 1200 },
     { dateTime: "2025-05-12T01:00:00Z", messageCount: 1300 },
@@ -101,6 +100,7 @@ const KafkaHourlyRateChart = () => {
 
   const options = {
     responsive: true,
+    maintainAspectRatio: false, // Allow size control
     plugins: {
       legend: { position: "top" },
       tooltip: { enabled: true },
@@ -111,7 +111,11 @@ const KafkaHourlyRateChart = () => {
     },
   };
 
-  return <Line data={chartData} options={options} />;
+  return (
+    <div style={{ width: "600px", height: "400px", margin: "auto" }}>
+      <Line data={chartData} options={options} />
+    </div>
+  );
 };
 
 export default KafkaHourlyRateChart;
