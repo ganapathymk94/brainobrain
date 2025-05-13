@@ -119,3 +119,94 @@ const KafkaHourlyRateChart = () => {
 };
 
 export default KafkaHourlyRateChart;
+
+
+import React, { useState } from "react";
+import { Line } from "react-chartjs-2";
+import { Chart as ChartJS, CategoryScale, LinearScale, PointElement, LineElement, Tooltip, Legend } from "chart.js";
+
+ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, Tooltip, Legend);
+
+const KafkaHourlyRateChart = () => {
+  const [selectedCluster, setSelectedCluster] = useState("A");
+  const [selectedTopic, setSelectedTopic] = useState("topic1");
+
+  // Static Hardcoded Data for Different Clusters & Topics
+  const hardcodedData = {
+    A: {
+      topic1: [
+        { dateTime: "2025-05-12T00:00:00Z", messageCount: 1200 },
+        { dateTime: "2025-05-12T01:00:00Z", messageCount: 1300 },
+        { dateTime: "2025-05-12T02:00:00Z", messageCount: 1100 },
+      ],
+      topic2: [
+        { dateTime: "2025-05-12T00:00:00Z", messageCount: 800 },
+        { dateTime: "2025-05-12T01:00:00Z", messageCount: 950 },
+        { dateTime: "2025-05-12T02:00:00Z", messageCount: 870 },
+      ],
+    },
+    B: {
+      topic1: [
+        { dateTime: "2025-05-12T00:00:00Z", messageCount: 1500 },
+        { dateTime: "2025-05-12T01:00:00Z", messageCount: 1400 },
+        { dateTime: "2025-05-12T02:00:00Z", messageCount: 1350 },
+      ],
+      topic2: [
+        { dateTime: "2025-05-12T00:00:00Z", messageCount: 1000 },
+        { dateTime: "2025-05-12T01:00:00Z", messageCount: 1050 },
+        { dateTime: "2025-05-12T02:00:00Z", messageCount: 1030 },
+      ],
+    },
+  };
+
+  const data = hardcodedData[selectedCluster][selectedTopic];
+
+  const chartData = {
+    labels: data.map(entry => new Date(entry.dateTime).toLocaleTimeString()),
+    datasets: [
+      {
+        label: `Messages per Hour (${selectedCluster} - ${selectedTopic})`,
+        data: data.map(entry => entry.messageCount),
+        borderColor: "#42A5F5",
+        backgroundColor: "rgba(66,165,245,0.2)",
+        pointRadius: 5,
+        tension: 0.4,
+      },
+    ],
+  };
+
+  const options = {
+    responsive: true,
+    maintainAspectRatio: false,
+    plugins: {
+      legend: { position: "top" },
+      tooltip: { enabled: true, mode: "index", intersect: false },
+    },
+    scales: {
+      x: { title: { display: true, text: "Time" } },
+      y: { title: { display: true, text: "Messages Count" } },
+    },
+  };
+
+  return (
+    <div style={{ width: "600px", height: "400px", margin: "auto" }}>
+      <div style={{ marginBottom: "10px", textAlign: "center" }}>
+        <label>Cluster:</label>
+        <select value={selectedCluster} onChange={(e) => setSelectedCluster(e.target.value)}>
+          <option value="A">Cluster A</option>
+          <option value="B">Cluster B</option>
+        </select>
+      </div>
+      <div style={{ marginBottom: "10px", textAlign: "center" }}>
+        <label>Topic:</label>
+        <select value={selectedTopic} onChange={(e) => setSelectedTopic(e.target.value)}>
+          <option value="topic1">Topic 1</option>
+          <option value="topic2">Topic 2</option>
+        </select>
+      </div>
+      <Line data={chartData} options={options} />
+    </div>
+  );
+};
+
+export default KafkaHourlyRateChart;
