@@ -69,7 +69,11 @@ export default KafkaHourlyRateChart;
 <KafkaHourlyRateChart cluster="A" />
 
 import React from "react";
-import { LineChart } from "@mui/x-charts";
+import { Line } from "react-chartjs-2";
+import { Chart as ChartJS, CategoryScale, LinearScale, PointElement, LineElement, Tooltip, Legend } from "chart.js";
+
+// Register required components for Chart.js
+ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, Tooltip, Legend);
 
 const KafkaHourlyRateChart = () => {
   // Static Sample Data
@@ -89,18 +93,25 @@ const KafkaHourlyRateChart = () => {
         data: data.map(entry => entry.messageCount),
         borderColor: "#42A5F5",
         backgroundColor: "rgba(66,165,245,0.2)",
+        pointRadius: 5,
+        tension: 0.4, // Smooth curve
       },
     ],
   };
 
-  return (
-    <LineChart
-      xAxis={[{ scaleType: "band", data: chartData.labels }]}
-      series={[{ data: chartData.datasets[0].data }]}
-      width={800}
-      height={400}
-    />
-  );
+  const options = {
+    responsive: true,
+    plugins: {
+      legend: { position: "top" },
+      tooltip: { enabled: true },
+    },
+    scales: {
+      x: { title: { display: true, text: "Time" } },
+      y: { title: { display: true, text: "Messages Count" } },
+    },
+  };
+
+  return <Line data={chartData} options={options} />;
 };
 
 export default KafkaHourlyRateChart;
