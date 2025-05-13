@@ -67,3 +67,40 @@ const KafkaHourlyRateChart = ({ cluster }) => {
 export default KafkaHourlyRateChart;
 
 <KafkaHourlyRateChart cluster="A" />
+
+import React from "react";
+import { LineChart } from "@mui/x-charts";
+
+const KafkaHourlyRateChart = () => {
+  // Static Sample Data
+  const data = [
+    { dateTime: "2025-05-12T00:00:00Z", messageCount: 1200 },
+    { dateTime: "2025-05-12T01:00:00Z", messageCount: 1300 },
+    { dateTime: "2025-05-12T02:00:00Z", messageCount: 1100 },
+    { dateTime: "2025-05-12T03:00:00Z", messageCount: 1400 },
+    { dateTime: "2025-05-12T04:00:00Z", messageCount: 1250 },
+  ];
+
+  const chartData = {
+    labels: data.map(entry => new Date(entry.dateTime).toLocaleTimeString()),
+    datasets: [
+      {
+        label: "Messages per Hour (Static Data)",
+        data: data.map(entry => entry.messageCount),
+        borderColor: "#42A5F5",
+        backgroundColor: "rgba(66,165,245,0.2)",
+      },
+    ],
+  };
+
+  return (
+    <LineChart
+      xAxis={[{ scaleType: "band", data: chartData.labels }]}
+      series={[{ data: chartData.datasets[0].data }]}
+      width={800}
+      height={400}
+    />
+  );
+};
+
+export default KafkaHourlyRateChart;
