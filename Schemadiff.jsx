@@ -1,8 +1,20 @@
-import React, { useEffect } from "react";
+import React, { useEffect, useState } from "react";
+import axios from "axios";
 import * as d3 from "d3";
 
-const SchemaLineageGraph = ({ lineageData }) => {
+const SchemaLineageGraph = () => {
+  const [lineageData, setLineageData] = useState(null);
+
+  // Fetch Schema Lineage from API
   useEffect(() => {
+    axios.get("/api/schema-lineage/orders") // Change topic dynamically if needed
+      .then(response => setLineageData(response.data))
+      .catch(error => console.error("Error fetching schema lineage:", error));
+  }, []);
+
+  useEffect(() => {
+    if (!lineageData) return;
+
     const width = 800, height = 400;
     const svg = d3.select("#lineageGraph").attr("width", width).attr("height", height);
 
@@ -18,7 +30,7 @@ const SchemaLineageGraph = ({ lineageData }) => {
       label: `Schema ${schema.version}`,
       breaking: schema.breakingChange ? "red" : "green",
       fields: schema.fields,
-      previousVersion: schema.previousVersion ? schema.previousVersion : null
+      previousVersion: schema.previousVersion || null
     }));
 
     const links = lineageData.schemas.slice(1).map((schema, i) => ({
@@ -66,7 +78,7 @@ const SchemaLineageGraph = ({ lineageData }) => {
 
   }, [lineageData]);
 
-  return <svg id="lineageGraph"></svg>;
+  return lineageData ? <svg id="lineageGraph"></svg> : <p>Loading schema lineage...</p>;
 };
 
 export default SchemaLineageGraph;
