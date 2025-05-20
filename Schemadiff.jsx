@@ -82,3 +82,45 @@ const SchemaLineageGraph = () => {
 };
 
 export default SchemaLineageGraph;
+
+
+import org.springframework.stereotype.Service;
+import org.springframework.web.client.RestTemplate;
+import java.util.*;
+
+@Service
+public class SchemaLineageService {
+    private final RestTemplate restTemplate = new RestTemplate();
+    private final String SCHEMA_REGISTRY_URL = "http://localhost:8081/subjects/";
+
+    public List<SchemaLineage> getSchemaLineage(String topic) {
+        List<SchemaLineage> lineage = new ArrayList<>();
+
+        // Fetch all schema versions
+        String schemaVersionsUrl = SCHEMA_REGISTRY_URL + topic + "-value/versions";
+        List<Integer> versions = restTemplate.getForObject(schemaVersionsUrl, List.class);
+
+        if (versions == null || versions.isEmpty()) return lineage;
+
+        String previousSchema = null;
+        for (Integer version : versions) {
+            String schemaDetailsUrl = SCHEMA_REGISTRY_URL + topic + "-value/versions/" + version;
+            Map<String, Object> schemaDetails = restTemplate.getForObject(schemaDetailsUrl, Map.class);
+            
+            String schemaJson = (String) schemaDetails.get("schema");
+            List<String> fields = extractFields(schemaJson);
+            
+            boolean breakingChange = previousSchema != null && !previousSchema.equals(schemaJson);
+            lineage.add(new SchemaLineage(topic, "v" + version, fields, breakingChange, previousSchema != null ? "v" + (version - 1) : null));
+            
+            previousSchema = schemaJson; // Set previous schema for comparison
+        }
+
+        return lineage;
+    }
+
+    private List<String> extractFields(String schemaJson) {
+        // Simple field extraction logic for JSON schema
+        return List.of(schemaJson.replaceAll("[^a-zA-Z0-9, ]", "").split(","));
+    }
+}
