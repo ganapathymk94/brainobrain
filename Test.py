@@ -11,13 +11,15 @@ def split_into_paragraph_chunks(text, num_paragraphs):
 
 @app.route('/process_markdown', methods=['POST'])
 def process_markdown():
-    """Flask route to receive and process Markdown text."""
-    markdown_text = request.json.get("markdown_text")
-    if not markdown_text:
-        return jsonify({"error": "No markdown text provided"}), 400
+    """Flask route to receive and process a Markdown file."""
+    if 'file' not in request.files:
+        return jsonify({"error": "No file uploaded"}), 400
+
+    file = request.files['file']
+    markdown_content = file.read().decode('utf-8')
 
     # Split into 8-paragraph chunks
-    chunks = split_into_paragraph_chunks(markdown_text, 8)
+    chunks = split_into_paragraph_chunks(markdown_content, 8)
 
     return jsonify({"total_chunks": len(chunks), "chunks": chunks})
 
