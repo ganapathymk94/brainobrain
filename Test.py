@@ -1,4 +1,5 @@
 from flask import Flask, request, jsonify
+import requests
 
 app = Flask(__name__)
 
@@ -11,12 +12,17 @@ def split_into_paragraph_chunks(text, num_paragraphs):
 
 @app.route('/process_markdown', methods=['POST'])
 def process_markdown():
-    """Flask route to receive and process a Markdown file."""
-    if 'file' not in request.files:
-        return jsonify({"error": "No file uploaded"}), 400
+    """Flask route to fetch and process a Markdown file from GitHub."""
+    github_url = request.json.get("github_url")
+    if not github_url:
+        return jsonify({"error": "No GitHub URL provided"}), 400
 
-    file = request.files['file']
-    markdown_content = file.read().decode('utf-8')
+    # Fetch file from GitHub
+    response = requests.get(github_url)
+    if response.status_code != 200:
+        return jsonify({"error": "Failed to fetch file from GitHub"}), 400
+    
+    markdown_content = response.text
 
     # Split into 8-paragraph chunks
     chunks = split_into_paragraph_chunks(markdown_content, 8)
