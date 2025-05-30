@@ -1,3 +1,26 @@
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.web.bind.annotation.*;
+
+import java.util.List;
+
+@RestController
+@RequestMapping("/api/kafka-search")
+public class KafkaSearchController {
+
+    @Autowired
+    private KafkaSearchService kafkaSearchService;
+
+    @GetMapping("/search")
+    public List<String> searchMessages(
+            @RequestParam String keyword,
+            @RequestParam(defaultValue = "0") int offset,
+            @RequestParam(defaultValue = "10") int limit) {
+        return kafkaSearchService.searchMessages(keyword, offset, limit);
+    }
+}
+
+_---------
+
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
