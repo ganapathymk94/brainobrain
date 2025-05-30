@@ -90,3 +90,62 @@ public class KafkaSearchService {
         return false;
     }
 }
+
+--------
+
+    import React, { useState } from "react";
+import axios from "axios";
+import { Typography, Paper, Box, TextField, Button, List, ListItem } from "@mui/material";
+
+const KafkaSearchDashboard = () => {
+  const [keyword, setKeyword] = useState("");
+  const [results, setResults] = useState([]);
+  const [offset, setOffset] = useState(0);
+  const limit = 10; // Number of messages to fetch per request
+
+  const searchMessages = () => {
+    if (!keyword) return;
+
+    axios.get(`/api/kafka-search/search?keyword=${keyword}&offset=${offset}&limit=${limit}`)
+      .then(response => {
+        setResults(prev => [...prev, ...response.data]); // Append new results
+        setOffset(prev => prev + limit); // Increment offset for next batch
+      })
+      .catch(error => console.error("Error searching Kafka messages:", error));
+  };
+
+  return (
+    <Paper sx={{ padding: 3, width: 600, margin: "auto", mt: 5 }}>
+      <Typography variant="h6">Kafka Message Search</Typography>
+
+      <TextField
+        fullWidth
+        label="Enter Keyword"
+        variant="outlined"
+        value={keyword}
+        onChange={(e) => setKeyword(e.target.value)}
+        sx={{ mt: 2 }}
+      />
+
+      <Button variant="contained" color="primary" onClick={searchMessages} sx={{ mt: 2 }}>
+        Search Kafka Messages
+      </Button>
+
+      {results.length > 0 && (
+        <Box sx={{ mt: 3 }}>
+          <List>
+            {results.map((msg, index) => <ListItem key={index}>{msg}</ListItem>)}
+          </List>
+        </Box>
+      )}
+
+      {results.length > 0 && (
+        <Button variant="outlined" color="secondary" onClick={searchMessages} sx={{ mt: 2 }}>
+          Load More Messages
+        </Button>
+      )}
+    </Paper>
+  );
+};
+
+export default KafkaSearchDashboard;
