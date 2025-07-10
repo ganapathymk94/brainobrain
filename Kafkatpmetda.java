@@ -225,3 +225,49 @@ public class KafkaMetadataService {
         auditRepo.save(audit);
     }
 }
+
+
+package com.example.schemasync.repository;
+
+import com.example.schemasync.entity.KafkaTopicMetadata;
+import org.springframework.data.jpa.repository.JpaRepository;
+import java.util.List;
+
+public interface KafkaTopicMetadataRepository extends JpaRepository<KafkaTopicMetadata, Integer> {
+    List<KafkaTopicMetadata> findByTopicNameOrderByCollectedAtDesc(String topicName);
+    KafkaTopicMetadata findTopByOrderByCollectedAtDesc();
+}
+
+
+package com.example.schemasync.entity;
+
+import javax.persistence.*;
+import java.time.LocalDateTime;
+
+@Entity
+@Table(name = "KafkaTopicMetadata")
+public class KafkaTopicMetadata {
+
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    private Integer id;
+
+    private String topicName;
+    private String messageType;
+    private Integer messagesToday;
+    private Integer replicationFactor;
+    private Integer insyncReplicas;
+
+    @Column(columnDefinition = "NVARCHAR(MAX)")
+    private String producerIds;
+
+    @Column(columnDefinition = "NVARCHAR(MAX)")
+    private String consumerGroups;
+
+    private LocalDateTime collectedAt = LocalDateTime.now();
+
+    // Getters and Setters...
+}
+
+
+
