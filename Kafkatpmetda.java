@@ -294,3 +294,52 @@ public class KafkaTopicMetadata {
     // Getters and setters...
 }
 
+
+package com.example.schemasync.util;
+
+import com.example.schemasync.entity.KafkaTopicMetadata;
+
+import java.util.Objects;
+
+public class KafkaMetadataDiffUtil {
+
+    public static boolean isMetadataChanged(KafkaTopicMetadata old, KafkaTopicMetadata current) {
+        if (old == null) return true;
+        return !Objects.equals(old.getPartitions(), current.getPartitions()) ||
+               !Objects.equals(old.getCompressionType(), current.getCompressionType()) ||
+               !Objects.equals(old.getMinInsyncReplicas(), current.getMinInsyncReplicas()) ||
+               !Objects.equals(old.getCleanupPolicy(), current.getCleanupPolicy()) ||
+               !Objects.equals(old.getRetentionMs(), current.getRetentionMs()) ||
+               !Objects.equals(old.getMessageFormatVersion(), current.getMessageFormatVersion()) ||
+               !Objects.equals(old.getMaxMessageBytes(), current.getMaxMessageBytes()) ||
+               !Objects.equals(old.getRetentionBytes(), current.getRetentionBytes()) ||
+               !Objects.equals(old.getReplicationFactor(), current.getReplicationFactor()) ||
+               !Objects.equals(old.getInsyncReplicas(), current.getInsyncReplicas()) ||
+               !Objects.equals(old.getMessagesToday(), current.getMessagesToday()) ||
+               !Objects.equals(old.getConsumerGroups(), current.getConsumerGroups());
+    }
+}
+
+
+private String valueOrDefault(Config config, String key) {
+        ConfigEntry entry = config.get(key);
+        return entry != null ? entry.value() : "unknown";
+    }
+
+    private Long longOrNull(Config config, String key) {
+        try {
+            ConfigEntry entry = config.get(key);
+            return entry != null ? Long.parseLong(entry.value()) : null;
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+    private Integer intOrNull(Config config, String key) {
+        try {
+            ConfigEntry entry = config.get(key);
+            return entry != null ? Integer.parseInt(entry.value()) : null;
+        } catch (Exception e) {
+            return null;
+        }
+    }
