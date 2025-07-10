@@ -171,7 +171,18 @@ public class KafkaMetadataService {
                 int replicationFactor = td.partitions().get(0).replicas().size();
                 int isr = td.partitions().get(0).isr().size();
                 String messageType = topic.contains("-avro") ? "AVRO" : "JSON";
+                ConfigResource resource = new ConfigResource(ConfigResource.Type.TOPIC, topic);
+DescribeConfigsResult configResult = admin.describeConfigs(Collections.singleton(resource));
+Config config = configResult.all().get().get(resource);
 
+String compressionType = config.get("compression.type") != null ? config.get("compression.type").value() : "unknown";
+String cleanupPolicy = config.get("cleanup.policy") != null ? config.get("cleanup.policy").value() : "unknown";
+String formatVersion = config.get("message.format.version") != null ? config.get("message.format.version").value() : "unknown";
+
+Long retentionMs = config.get("retention.ms") != null ? Long.valueOf(config.get("retention.ms").value()) : null;
+Integer minInsync = config.get("min.insync.replicas") != null ? Integer.valueOf(config.get("min.insync.replicas").value()) : null;
+Integer maxMessageBytes = config.get("max.message.bytes") != null ? Integer.valueOf(config.get("max.message.bytes").value()) : null;
+Long retentionBytes = config.get("retention.bytes") != null ? Long.valueOf(config.get("retention.bytes").value()) : null;
                 // Estimate message count
                 long messageCount = 0;
                 List<PartitionInfo> partitions = consumer.partitionsFor(topic);
@@ -204,7 +215,13 @@ public class KafkaMetadataService {
                 meta.setInsyncReplicas(isr);
                 meta.setProducerIds("TBD");
                 meta.setConsumerGroups(String.join(",", new HashSet<>(consumers)));
-
+metadata.setCompressionType(compressionType);
+metadata.setMinInsyncReplicas(minInsync);
+metadata.setCleanupPolicy(cleanupPolicy);
+metadata.setRetentionMs(retentionMs);
+metadata.setMessageFormatVersion(formatVersion);
+metadata.setMaxMessageBytes(maxMessageBytes);
+metadata.setRetentionBytes(retentionBytes);
                 metadataRepo.save(meta);
                 topicsProcessed++;
             }
@@ -253,7 +270,15 @@ public class KafkaTopicMetadata {
     private Integer id;
 
     private String topicName;
-    private String messageType;
+    private Integer partitions;
+    private String compressionType;
+    private Integer minInsyncReplicas;
+    private String cleanupPolicy;
+    private Long retentionMs;
+    private String messageFormatVersion;
+    private Integer maxMessageBytes;
+    private Long retentionBytes;
+
     private Integer messagesToday;
     private Integer replicationFactor;
     private Integer insyncReplicas;
@@ -266,8 +291,6 @@ public class KafkaTopicMetadata {
 
     private LocalDateTime collectedAt = LocalDateTime.now();
 
-    // Getters and Setters...
+    // Getters and setters...
 }
-
-
 
