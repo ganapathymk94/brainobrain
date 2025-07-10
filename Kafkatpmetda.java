@@ -154,82 +154,116 @@ public class KafkaMetadataService {
         kafkaProps.put("bootstrap.servers", "localhost:9092");
     }
 
-    @Scheduled(cron = "0 0 0 * * ?")   // At midnight
-    @Scheduled(cron = "0 0 23 * * ?") // At 11 PM
-    public void collectMetadata() {
+package com.example.schemasync.service;
+
+import com.example.schemasync.entity.KafkaTopicMetadata;
+import com.example.schemasync.entity.KafkaSyncAudit;
+import com.example.schemasync.repository.KafkaTopicMetadataRepository;
+import com.example.schemasync.repository.KafkaSyncAuditRepository;
+import com.example.schemasync.util.KafkaMetadataDiffUtil;
+import org.apache.kafka.clients.admin.*;
+import org.apache.kafka.clients.consumer.KafkaConsumer;
+import org.apache.kafka.common.*;
+import org.apache.kafka.common.serialization.StringDeserializer;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.scheduling.annotation.Scheduled;
+import org.springframework.stereotype.Service;
+
+import java.time.LocalDateTime;
+import java.util.*;
+
+@Service
+public class KafkaMetadataService {
+
+    @Autowired
+    private KafkaTopicMetadataRepository metadataRepo;
+
+    @Autowired
+    private KafkaSyncAuditRepository auditRepo;
+
+    private final Properties props;
+
+    public KafkaMetadataService() {
+        this.props = new Properties();
+        props.put(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9092");
+        props.put("bootstrap.servers", "localhost:9092");
+    }
+
+    @Scheduled(cron = "0 0 0 * * ?")   // midnight
+    @Scheduled(cron = "0 0 23 * * ?") // 11 PM
+    public void collectTopicMetadata() {
         int topicsProcessed = 0;
         StringBuilder remarks = new StringBuilder();
 
-        try (AdminClient admin = AdminClient.create(kafkaProps);
-             KafkaConsumer<String, String> consumer = new KafkaConsumer<>(kafkaProps, new StringDeserializer(), new StringDeserializer())) {
+        try (AdminClient admin = AdminClient.create(props);
+             KafkaConsumer<String, String> consumer = new KafkaConsumer<>(props, new StringDeserializer(), new StringDeserializer())) {
 
             Set<String> topicNames = admin.listTopics().names().get();
             Map<String, TopicDescription> descriptions = admin.describeTopics(topicNames).all().get();
 
             for (String topic : topicNames) {
                 TopicDescription td = descriptions.get(topic);
+                int partitions = td.partitions().size();
                 int replicationFactor = td.partitions().get(0).replicas().size();
                 int isr = td.partitions().get(0).isr().size();
-                String messageType = topic.contains("-avro") ? "AVRO" : "JSON";
-                ConfigResource resource = new ConfigResource(ConfigResource.Type.TOPIC, topic);
-DescribeConfigsResult configResult = admin.describeConfigs(Collections.singleton(resource));
-Config config = configResult.all().get().get(resource);
 
-String compressionType = config.get("compression.type") != null ? config.get("compression.type").value() : "unknown";
-String cleanupPolicy = config.get("cleanup.policy") != null ? config.get("cleanup.policy").value() : "unknown";
-String formatVersion = config.get("message.format.version") != null ? config.get("message.format.version").value() : "unknown";
-
-Long retentionMs = config.get("retention.ms") != null ? Long.valueOf(config.get("retention.ms").value()) : null;
-Integer minInsync = config.get("min.insync.replicas") != null ? Integer.valueOf(config.get("min.insync.replicas").value()) : null;
-Integer maxMessageBytes = config.get("max.message.bytes") != null ? Integer.valueOf(config.get("max.message.bytes").value()) : null;
-Long retentionBytes = config.get("retention.bytes") != null ? Long.valueOf(config.get("retention.bytes").value()) : null;
-                // Estimate message count
-                long messageCount = 0;
-                List<PartitionInfo> partitions = consumer.partitionsFor(topic);
-                for (PartitionInfo p : partitions) {
+                // Message count estimation
+                long msgCount = 0;
+                for (PartitionInfo p : consumer.partitionsFor(topic)) {
                     TopicPartition tp = new TopicPartition(topic, p.partition());
-                    consumer.assign(Collections.singletonList(tp));
-                    consumer.seekToBeginning(Collections.singletonList(tp));
+                    consumer.assign(Collections.singleton(tp));
+                    consumer.seekToBeginning(Collections.singleton(tp));
                     long startOffset = consumer.position(tp);
-                    consumer.seekToEnd(Collections.singletonList(tp));
+                    consumer.seekToEnd(Collections.singleton(tp));
                     long endOffset = consumer.position(tp);
-                    messageCount += (endOffset - startOffset);
+                    msgCount += (endOffset - startOffset);
                 }
 
-                // Find consumers
+                // Consumer group tracking
                 List<String> consumers = new ArrayList<>();
                 for (ConsumerGroupListing cg : admin.listConsumerGroups().all().get()) {
-                    ConsumerGroupDescription cgDesc = admin.describeConsumerGroups(Collections.singletonList(cg.groupId())).all().get().get(cg.groupId());
-                    for (MemberDescription member : cgDesc.members()) {
+                    ConsumerGroupDescription desc = admin.describeConsumerGroups(Collections.singletonList(cg.groupId()))
+                                                         .all().get().get(cg.groupId());
+                    for (MemberDescription member : desc.members()) {
                         member.assignment().topicPartitions().forEach(tp -> {
                             if (tp.topic().equals(topic)) consumers.add(cg.groupId());
                         });
                     }
                 }
 
-                KafkaTopicMetadata meta = new KafkaTopicMetadata();
-                meta.setTopicName(topic);
-                meta.setMessageType(messageType);
-                meta.setMessagesToday((int) messageCount);
-                meta.setReplicationFactor(replicationFactor);
-                meta.setInsyncReplicas(isr);
-                meta.setProducerIds("TBD");
-                meta.setConsumerGroups(String.join(",", new HashSet<>(consumers)));
-metadata.setCompressionType(compressionType);
-metadata.setMinInsyncReplicas(minInsync);
-metadata.setCleanupPolicy(cleanupPolicy);
-metadata.setRetentionMs(retentionMs);
-metadata.setMessageFormatVersion(formatVersion);
-metadata.setMaxMessageBytes(maxMessageBytes);
-metadata.setRetentionBytes(retentionBytes);
-                metadataRepo.save(meta);
-                topicsProcessed++;
+                // Topic config
+                ConfigResource resource = new ConfigResource(ConfigResource.Type.TOPIC, topic);
+                Config config = admin.describeConfigs(Collections.singletonList(resource))
+                                     .all().get().get(resource);
+
+                KafkaTopicMetadata metadata = new KafkaTopicMetadata();
+                metadata.setTopicName(topic);
+                metadata.setPartitions(partitions);
+                metadata.setCompressionType(valueOrDefault(config, "compression.type"));
+                metadata.setCleanupPolicy(valueOrDefault(config, "cleanup.policy"));
+                metadata.setMessageFormatVersion(valueOrDefault(config, "message.format.version"));
+                metadata.setRetentionMs(longOrNull(config, "retention.ms"));
+                metadata.setRetentionBytes(longOrNull(config, "retention.bytes"));
+                metadata.setMaxMessageBytes(intOrNull(config, "max.message.bytes"));
+                metadata.setMinInsyncReplicas(intOrNull(config, "min.insync.replicas"));
+
+                metadata.setReplicationFactor(replicationFactor);
+                metadata.setInsyncReplicas(isr);
+                metadata.setMessagesToday((int) msgCount);
+                metadata.setProducerIds("TBD");
+                metadata.setConsumerGroups(String.join(",", new HashSet<>(consumers)));
+
+                KafkaTopicMetadata previous = metadataRepo.findTopByTopicNameOrderByCollectedAtDesc(topic);
+
+                if (KafkaMetadataDiffUtil.isMetadataChanged(previous, metadata)) {
+                    metadataRepo.save(metadata);
+                    topicsProcessed++;
+                }
             }
 
-            remarks.append("Topic metadata collection successful.");
+            remarks.append("Metadata sync completed with ").append(topicsProcessed).append(" changes.");
         } catch (Exception e) {
-            remarks.append("Failed to collect metadata: ").append(e.getMessage());
-            e.printStackTrace();
+            remarks.append("Metadata sync failed: ").append(e.getMessage());
         }
 
         KafkaSyncAudit audit = new KafkaSyncAudit();
@@ -240,6 +274,29 @@ metadata.setRetentionBytes(retentionBytes);
         audit.setTotalVersionsAdded(0);
         audit.setRemarks(remarks.toString());
         auditRepo.save(audit);
+    }
+
+    private String valueOrDefault(Config config, String key) {
+        ConfigEntry entry = config.get(key);
+        return entry != null ? entry.value() : "unknown";
+    }
+
+    private Long longOrNull(Config config, String key) {
+        try {
+            ConfigEntry entry = config.get(key);
+            return entry != null ? Long.parseLong(entry.value()) : null;
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+    private Integer intOrNull(Config config, String key) {
+        try {
+            ConfigEntry entry = config.get(key);
+            return entry != null ? Integer.parseInt(entry.value()) : null;
+        } catch (Exception e) {
+            return null;
+        }
     }
 }
 
