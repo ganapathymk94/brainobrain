@@ -110,86 +110,56 @@ import {
   Table, TableBody, TableRow, TableCell, Paper
 } from "@mui/material";
 import axios from "axios";
-
-const topics = ["order-event", "user-event"]; // Example static list
-
-export default function SchemaValidatorPage() {
-  const [selected, setSelected] = useState("");
+export default function SchemaValidatorPage({ topic }) {
   const [latest, setLatest] = useState("");
   const [proposedSchemaText, setProposedSchemaText] = useState("");
   const [parsedSchema, setParsedSchema] = useState(null);
   const [issues, setIssues] = useState([]);
   const [compatible, setCompatible] = useState(null);
 
-  const fetchLatestSchema = async () => {
-    try {
-      const res = await axios.get(`/api/schema/latest/${selected}`);
-      setLatest(res.data);
-    } catch (error) {
-      console.error("Error fetching latest schema:", error);
+  useEffect(() => {
+    if (topic) {
+      axios.get(`/api/schema/latest/${topic}`)
+        .then(res => setLatest(res.data))
+        .catch(err => setLatest("❌ Error fetching schema"));
     }
-  };
+  }, [topic]);
 
   const handleSchemaTextChange = (text) => {
     setProposedSchemaText(text);
     try {
       const parsed = JSON.parse(text);
       setParsedSchema(parsed);
-    } catch (e) {
+    } catch {
       setParsedSchema(null);
     }
   };
 
   const handleValidate = async () => {
     if (!parsedSchema) {
-      alert("❌ Proposed schema is not valid JSON.");
+      alert("❌ Invalid schema");
       return;
     }
-
-    try {
-      const res = await axios.post(`/api/schema/validate`, {
-        subject: selected,
-        schema: parsedSchema
-      });
-      setCompatible(res.data.compatible);
-      setIssues(res.data.issues);
-    } catch (error) {
-      console.error("Validation error:", error);
-      alert("🚫 Server validation failed.");
-    }
+    const res = await axios.post(`/api/schema/validate`, {
+      subject: topic,
+      schema: parsedSchema
+    });
+    setCompatible(res.data.compatible);
+    setIssues(res.data.issues);
   };
 
   return (
-    <Paper sx={{ p: 4, maxWidth: "900px", margin: "auto", mt: 4 }}>
-      <Typography variant="h5" gutterBottom>Schema Validation Portal</Typography>
-
-      <TextField
-        select fullWidth label="Choose Kafka Topic"
-        value={selected}
-        onChange={(e) => {
-          setSelected(e.target.value);
-          fetchLatestSchema();
-        }}
-        sx={{ mb: 3 }}
-      >
-        {topics.map(topic => (
-          <MenuItem key={topic} value={topic}>{topic}</MenuItem>
-        ))}
-      </TextField>
+    <Paper sx={{ p: 4, maxWidth: 900, margin: "auto", mt: 4 }}>
+      <Typography variant="h5" gutterBottom>Schema Validation for: {topic}</Typography>
 
       {latest && (
         <>
           <Typography variant="subtitle1">📦 Latest Registered Schema:</Typography>
-          <TextField
-            value={latest}
-            multiline rows={6}
-            fullWidth sx={{ mb: 3 }}
-            InputProps={{ readOnly: true }}
-          />
+          <TextField value={latest} multiline rows={6} fullWidth sx={{ mb: 3 }} InputProps={{ readOnly: true }} />
         </>
       )}
 
-      <Typography variant="subtitle1">✏️ Proposed Schema (paste valid JSON):</Typography>
+      <Typography variant="subtitle1">✏️ Proposed Schema (JSON):</Typography>
       <TextField
         value={proposedSchemaText}
         onChange={(e) => handleSchemaTextChange(e.target.value)}
@@ -229,3 +199,4 @@ export default function SchemaValidatorPage() {
     </Paper>
   );
 }
+          
