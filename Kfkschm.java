@@ -104,75 +104,115 @@ public class SchemaRegistryService {
 
 
 
-import { useState } from "react";
-import { TextField, Button, Typography, MenuItem, Table, TableBody, TableRow, TableCell, Paper } from "@mui/material";
+import React, { useState } from "react";
+import {
+  TextField, Button, Typography, MenuItem,
+  Table, TableBody, TableRow, TableCell, Paper
+} from "@mui/material";
 import axios from "axios";
 
-const topics = ["order-event", "user-event"]; // You can fetch this via API too
+const topics = ["order-event", "user-event"]; // Example static list
 
 export default function SchemaValidatorPage() {
   const [selected, setSelected] = useState("");
   const [latest, setLatest] = useState("");
-  const [newSchema, setNewSchema] = useState("");
+  const [proposedSchemaText, setProposedSchemaText] = useState("");
+  const [parsedSchema, setParsedSchema] = useState(null);
   const [issues, setIssues] = useState([]);
   const [compatible, setCompatible] = useState(null);
 
-  const fetchSchema = async () => {
-    const res = await axios.get(`/api/schema/latest/${selected}`);
-    setLatest(res.data);
+  const fetchLatestSchema = async () => {
+    try {
+      const res = await axios.get(`/api/schema/latest/${selected}`);
+      setLatest(res.data);
+    } catch (error) {
+      console.error("Error fetching latest schema:", error);
+    }
+  };
+
+  const handleSchemaTextChange = (text) => {
+    setProposedSchemaText(text);
+    try {
+      const parsed = JSON.parse(text);
+      setParsedSchema(parsed);
+    } catch (e) {
+      setParsedSchema(null);
+    }
   };
 
   const handleValidate = async () => {
-    const res = await axios.post(`/api/schema/validate`, { subject: selected, schema: newSchema });
-    setCompatible(res.data.compatible);
-    setIssues(res.data.issues);
-  };
+    if (!parsedSchema) {
+      alert("❌ Proposed schema is not valid JSON.");
+      return;
+    }
 
-  const handlePush = async () => {
-    await axios.post(`/api/schema/push`, { subject: selected, schema: newSchema });
-    alert("✅ Pushed to Bitbucket!");
+    try {
+      const res = await axios.post(`/api/schema/validate`, {
+        subject: selected,
+        schema: parsedSchema
+      });
+      setCompatible(res.data.compatible);
+      setIssues(res.data.issues);
+    } catch (error) {
+      console.error("Validation error:", error);
+      alert("🚫 Server validation failed.");
+    }
   };
 
   return (
-    <Paper sx={{ p: 4 }}>
-      <Typography variant="h5">Schema Validation Portal</Typography>
+    <Paper sx={{ p: 4, maxWidth: "900px", margin: "auto", mt: 4 }}>
+      <Typography variant="h5" gutterBottom>Schema Validation Portal</Typography>
 
       <TextField
-        select fullWidth label="Choose Topic" value={selected}
-        onChange={e => { setSelected(e.target.value); fetchSchema(); }}
-        sx={{ my: 2 }}
+        select fullWidth label="Choose Kafka Topic"
+        value={selected}
+        onChange={(e) => {
+          setSelected(e.target.value);
+          fetchLatestSchema();
+        }}
+        sx={{ mb: 3 }}
       >
-        {topics.map(t => <MenuItem key={t} value={t}>{t}</MenuItem>)}
+        {topics.map(topic => (
+          <MenuItem key={topic} value={topic}>{topic}</MenuItem>
+        ))}
       </TextField>
 
       {latest && (
         <>
-          <Typography variant="subtitle1">Latest Registered Schema:</Typography>
-          <TextField value={latest} multiline rows={6} fullWidth sx={{ mb: 2 }} />
+          <Typography variant="subtitle1">📦 Latest Registered Schema:</Typography>
+          <TextField
+            value={latest}
+            multiline rows={6}
+            fullWidth sx={{ mb: 3 }}
+            InputProps={{ readOnly: true }}
+          />
         </>
       )}
 
-      <Typography variant="subtitle1">Proposed Schema:</Typography>
+      <Typography variant="subtitle1">✏️ Proposed Schema (paste valid JSON):</Typography>
       <TextField
-        value={newSchema} multiline rows={6} fullWidth sx={{ mb: 2 }}
-        onChange={e => setNewSchema(e.target.value)}
+        value={proposedSchemaText}
+        onChange={(e) => handleSchemaTextChange(e.target.value)}
+        multiline rows={6}
+        fullWidth sx={{ mb: 3 }}
+        placeholder='{"type":"record","name":"User","fields":[{"name":"id","type":"string"}]}'
       />
 
       <Button variant="contained" onClick={handleValidate}>Validate</Button>
 
       {compatible !== null && (
         <>
-          <Typography sx={{ mt: 2 }}>
-            Compatibility: {compatible ? "✅ Compatible" : "❌ Not Compatible"}
+          <Typography sx={{ mt: 3 }}>
+            Compatibility: <strong>{compatible ? "✅ Compatible" : "❌ Not Compatible"}</strong>
           </Typography>
 
           {!compatible && (
             <Table sx={{ mt: 2 }}>
               <TableBody>
-                {issues.map((i, idx) => (
+                {issues.map((issue, idx) => (
                   <TableRow key={idx}>
-                    <TableCell>{i.field}</TableCell>
-                    <TableCell>{i.issue}</TableCell>
+                    <TableCell>{issue.field}</TableCell>
+                    <TableCell>{issue.issue}</TableCell>
                   </TableRow>
                 ))}
               </TableBody>
@@ -180,9 +220,9 @@ export default function SchemaValidatorPage() {
           )}
 
           {compatible && (
-            <Button variant="outlined" color="success" sx={{ mt: 2 }} onClick={handlePush}>
-              Push to Bitbucket
-            </Button>
+            <Typography sx={{ mt: 3 }} color="success.main">
+              ✅ Schema is compatible and ready for deployment.
+            </Typography>
           )}
         </>
       )}
