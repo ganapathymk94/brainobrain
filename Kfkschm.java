@@ -199,4 +199,153 @@ export default function SchemaValidatorPage({ topic }) {
     </Paper>
   );
 }
-          
+
+
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import io.confluent.kafka.schemaregistry.client.CachedSchemaRegistryClient;
+import io.confluent.kafka.schemaregistry.client.SchemaRegistryClient;
+import org.springframework.stereotype.Service;
+
+import java.util.*;
+
+@Service
+public class SchemaValidatorService {
+
+    private final SchemaRegistryClient client;
+    private final ObjectMapper mapper;
+
+    public SchemaValidatorService() {
+        this.client = new CachedSchemaRegistryClient("http://localhost:8081", 100);
+        this.mapper = new ObjectMapper();
+    }
+
+    public Map<String, Object> validate(String subject, JsonNode proposedSchemaNode) throws Exception {
+        String proposedSchemaString = mapper.writeValueAsString(proposedSchemaNode);
+        boolean isCompatible = client.testCompatibility(subject, proposedSchemaString);
+
+        List<Map<String, String>> issues = new ArrayList<>();
+
+        if (!isCompatible) {
+            String latestSchemaString = client.getLatestSchemaMetadata(subject).getSchema();
+            JsonNode latestSchemaNode = mapper.readTree(latestSchemaString);
+
+            Map<String, FieldMeta> oldFields = collectFields(latestSchemaNode, "", new HashMap<>());
+            Map<String, FieldMeta> newFields = collectFields(proposedSchemaNode, "", new HashMap<>());
+
+            for (String path : newFields.keySet()) {
+                if (!oldFields.containsKey(path)) {
+                    FieldMeta meta = newFields.get(path);
+                    if (!meta.nullable && !meta.hasDefault) {
+                        issues.add(issue(path, "New field without default or nullable type"));
+                    }
+                } else {
+                    FieldMeta oldMeta = oldFields.get(path);
+                    FieldMeta newMeta = newFields.get(path);
+                    if (!oldMeta.type.equals(newMeta.type)) {
+                        issues.add(issue(path, "Type changed from " + oldMeta.type + " to " + newMeta.type));
+                    }
+                }
+            }
+
+            for (String path : oldFields.keySet()) {
+                if (!newFields.containsKey(path)) {
+                    issues.add(issue(path, "Field removed in new schema"));
+                }
+            }
+
+            if (issues.isEmpty()) {
+                issues.add(issue("schema", "Schema incompatible (unknown structural change)"));
+            }
+        }
+
+        Map<String, Object> result = new HashMap<>();
+        result.put("subject", subject);
+        result.put("compatible", isCompatible);
+        result.put("issues", issues);
+        return result;
+    }
+
+    private Map<String, FieldMeta> collectFields(JsonNode schemaNode, String parentPath, Map<String, FieldMeta> out) {
+        JsonNode fieldsNode = schemaNode.path("fields");
+        if (fieldsNode.isMissingNode()) return out;
+
+        for (JsonNode field : fieldsNode) {
+            String fieldName = field.path("name").asText();
+            JsonNode typeNode = field.path("type");
+            boolean hasDefault = field.has("default");
+
+            List<String> flattenedTypes = flattenTypes(typeNode);
+            boolean isNullable = flattenedTypes.contains("null");
+
+            for (String type : flattenedTypes) {
+                String path = parentPath.isEmpty() ? fieldName : parentPath + "." + fieldName;
+
+                if (type.equals("record")) {
+                    JsonNode nestedSchema = field.path("type");
+                    if (nestedSchema.isArray()) {
+                        // find non-null type
+                        for (JsonNode unionType : nestedSchema) {
+                            if (unionType.isObject() && unionType.path("type").asText().equals("record")) {
+                                collectFields(unionType, path, out);
+                            }
+                        }
+                    } else {
+                        collectFields(typeNode, path, out);
+                    }
+                } else if (type.equals("array")) {
+                    JsonNode itemsNode = typeNode.path("items");
+                    String itemPath = path + "[]";
+                    if (itemsNode.isObject() && itemsNode.has("fields")) {
+                        collectFields(itemsNode, itemPath, out);
+                    } else {
+                        FieldMeta meta = new FieldMeta(itemsNode.toString(), hasDefault, isNullable);
+                        out.put(itemPath, meta);
+                    }
+                } else {
+                    FieldMeta meta = new FieldMeta(type, hasDefault, isNullable);
+                    out.put(path, meta);
+                }
+            }
+        }
+
+        return out;
+    }
+
+    private List<String> flattenTypes(JsonNode typeNode) {
+        List<String> types = new ArrayList<>();
+        if (typeNode.isTextual()) {
+            types.add(typeNode.asText());
+        } else if (typeNode.isArray()) {
+            for (JsonNode t : typeNode) {
+                if (t.isTextual()) {
+                    types.add(t.asText());
+                } else if (t.isObject()) {
+                    types.add(t.path("type").asText());
+                }
+            }
+        } else if (typeNode.isObject()) {
+            types.add(typeNode.path("type").asText());
+        }
+        return types;
+    }
+
+    private Map<String, String> issue(String path, String message) {
+        Map<String, String> map = new HashMap<>();
+        map.put("field", path);
+        map.put("issue", message);
+        return map;
+    }
+
+    private static class FieldMeta {
+        public String type;
+        public boolean hasDefault;
+        public boolean nullable;
+
+        public FieldMeta(String type, boolean hasDefault, boolean nullable) {
+            this.type = type;
+            this.hasDefault = hasDefault;
+            this.nullable = nullable;
+        }
+    }
+}
