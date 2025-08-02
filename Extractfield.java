@@ -143,3 +143,36 @@ WITH RankedSchemas AS (
 SELECT topic_name, version, schema_json
 FROM RankedSchemas
 WHERE rn = 1
+
+@Repository
+public class SchemaVersionsRepositoryImpl implements SchemaVersionsRepository {
+
+    @PersistenceContext
+    private EntityManager entityManager;
+
+    @Override
+    public List<TopicSchema> fetchLatestSchemas() {
+        String sql = """
+            WITH RankedSchemas AS (
+                SELECT topic_name, version, schema_json,
+                       ROW_NUMBER() OVER (PARTITION BY topic_name ORDER BY version DESC) AS rn
+                FROM SchemaVersions
+            )
+            SELECT topic_name, version, schema_json
+            FROM RankedSchemas
+            WHERE rn = 1
+        """;
+
+        List<Object[]> rows = entityManager.createNativeQuery(sql).getResultList();
+
+        List<TopicSchema> result = new ArrayList<>();
+        for (Object[] row : rows) {
+            String topicName = (String) row[0];
+            int version = ((Number) row[1]).intValue();
+            String schemaJson = (String) row[2];
+            result.add(new TopicSchema(topicName, version, schemaJson));
+        }
+
+        return result;
+    }
+}
