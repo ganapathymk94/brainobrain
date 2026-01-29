@@ -31,61 +31,73 @@ public class ReconciliationServiceApp {
         props.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9092");
         props.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.String().getClass());
         props.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.String().getClass());
-        props.put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, StreamsConfig.EXACTLY_ONCE_V2); // safer in prod
+        props.put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, StreamsConfig.EXACTLY_ONCE); // Java 8 safe
 
         StreamsBuilder builder = new StreamsBuilder();
 
-        // Subscribe to all topics (wildcard). Adjust regex if needed.
+        // Subscribe to all topics (wildcard)
         KStream<String, String> inputStream = builder.stream(Pattern.compile(".*"));
 
-        ObjectMapper mapper = new ObjectMapper();
+        final ObjectMapper mapper = new ObjectMapper();
 
         // Enrich with reconciliation metadata
-        KStream<String, String> enrichedStream = inputStream.transformValues(() -> new ValueTransformerWithKey<String, String, String>() {
-            private ProcessorContext context;
-
+        KStream<String, String> enrichedStream = inputStream.transformValues(new ValueTransformerWithKeySupplier<String, String, String>() {
             @Override
-            public void init(ProcessorContext context) {
-                this.context = context;
+            public ValueTransformerWithKey<String, String, String> get() {
+                return new ValueTransformerWithKey<String, String, String>() {
+                    private ProcessorContext context;
+
+                    @Override
+                    public void init(ProcessorContext context) {
+                        this.context = context;
+                    }
+
+                    @Override
+                    public String transform(String readOnlyKey, String value) {
+                        try {
+                            JsonNode json = mapper.readTree(value);
+
+                            String traceId = json.hasNonNull("traceId") ? json.get("traceId").asText() : "MISSING_TRACEID";
+                            String payloadHash = DigestUtils.sha256Hex(value);
+                            String sourceTopic = context.topic();
+
+                            long timestamp = System.currentTimeMillis();
+                            String status = "SUCCESS";
+                            if ("MISSING_TRACEID".equals(traceId)) {
+                                status = "FAILED";
+                            }
+
+                            return String.format(
+                                "{\"traceId\":\"%s\",\"payloadHash\":\"%s\",\"sourceTopic\":\"%s\",\"timestamp\":%d,\"status\":\"%s\"}",
+                                traceId, payloadHash, sourceTopic, timestamp, status
+                            );
+                        } catch (Exception e) {
+                            return String.format(
+                                "{\"traceId\":\"error\",\"payloadHash\":\"\",\"sourceTopic\":\"%s\",\"timestamp\":%d,\"status\":\"FAILED\"}",
+                                context.topic(), System.currentTimeMillis()
+                            );
+                        }
+                    }
+
+                    @Override
+                    public void close() {
+                        // no-op
+                    }
+                };
             }
-
-            @Override
-            public String transform(String readOnlyKey, String value) {
-                try {
-                    JsonNode json = mapper.readTree(value);
-
-                    // Extract required fields safely
-                    String traceId = json.hasNonNull("traceId") ? json.get("traceId").asText() : "MISSING_TRACEID";
-                    String payloadHash = DigestUtils.sha256Hex(value);
-                    String sourceTopic = context.topic(); // namespace
-
-                    long timestamp = System.currentTimeMillis();
-                    String status = traceId.equals("MISSING_TRACEID") ? "FAILED" : "SUCCESS";
-
-                    return String.format(
-                        "{\"traceId\":\"%s\",\"payloadHash\":\"%s\",\"sourceTopic\":\"%s\",\"timestamp\":%d,\"status\":\"%s\"}",
-                        traceId, payloadHash, sourceTopic, timestamp, status
-                    );
-                } catch (Exception e) {
-                    return String.format(
-                        "{\"traceId\":\"error\",\"payloadHash\":\"\",\"sourceTopic\":\"%s\",\"timestamp\":%d,\"status\":\"FAILED\"}",
-                        context.topic(), System.currentTimeMillis()
-                    );
-                }
-            }
-
-            @Override
-            public void close() {}
         });
 
         // Repartition into fixed partition count (e.g., 24)
         KStream<String, String> repartitioned = enrichedStream
-            .selectKey((key, value) -> {
-                try {
-                    JsonNode json = mapper.readTree(value);
-                    return json.get("traceId").asText();
-                } catch (Exception e) {
-                    return "error";
+            .selectKey(new KeyValueMapper<String, String, String>() {
+                @Override
+                public String apply(String key, String value) {
+                    try {
+                        JsonNode json = mapper.readTree(value);
+                        return json.get("traceId").asText();
+                    } catch (Exception e) {
+                        return "error";
+                    }
                 }
             })
             .repartition(Repartitioned.with(Serdes.String(), Serdes.String()).withNumberOfPartitions(24));
@@ -103,7 +115,13 @@ public class ReconciliationServiceApp {
         KafkaStreams streams = new KafkaStreams(builder.build(), props);
         streams.start();
 
-        Runtime.getRuntime().addShutdownHook(new Thread(streams::close));
+        Runtime.getRuntime().addShutdownHook(new Thread(new Runnable() {
+            @Override
+            public void run() {
+                streams.close();
+            }
+        }));
+
         return streams;
     }
 }
@@ -139,4 +157,4 @@ class ReconciliationController {
                     .body("{\"traceId\":\"" + traceId + "\",\"status\":\"NOT_FOUND\"}");
         }
     }
-        }
+}
